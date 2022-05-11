@@ -1,0 +1,46 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:android)
+
+platform :android do
+  before_all do
+    ENV['FL_BUILD_NUMBER_PROJECT'] = "Runner.xcodeproj"
+    ENV["SLACK_URL_FIREBASE"] = "https://hooks.slack.com/services/slack/url/sample"
+    # Ref: https://medium.com/cristian-ortega/using-swift-package-manager-in-real-life-projects-e80d60edd860
+    # check↑ 'Option4/Fastlane compatibility'
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+    # For CI KeyChain setting(This info must match Matchfile info).
+    ENV["MATCH_KEYCHAIN_NAME"] = "ci_sample_keychain"
+    ENV["MATCH_KEYCHAIN_PASSWORD"] = "match_keychain_password"
+    # Password required in Match
+    ENV["MATCH_PASSWORD"] = "match_password"
+    # Firebase
+    ENV["FIREBASE_APP_ID_IOS"] = "firebase_app_id_ios"
+  end
+
+  # In Android, write only script about building app and uploading apk to Firebase App Distribution.
+  desc "Submit a new Beta Build to Crashlytics Beta"
+  lane :upload_firebase_app_distribution do
+    sh("flutter build apk --release --flavor adhoc --target lib/main/main-release.dart")
+
+    firebase_app_distribution(
+      app: ENV["FIREBASE_APP_ID_IOS"],
+      groups: "Debug",
+      release_notes: "../ios/fastlane/metadata/ja/release_notes.txt",
+      apk_path: "../build/app/outputs/apk/adhoc/release/app-release.apk"
+    )
+  end
+end

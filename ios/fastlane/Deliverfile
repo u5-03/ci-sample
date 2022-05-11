@@ -1,0 +1,28 @@
+# The Deliverfile allows you to store various App Store Connect metadata
+# For more information, check out the docs
+# https://docs.fastlane.tools/actions/deliver/
+
+app_identifier "com.example.ciSample"
+team_id "team_id"
+
+force true
+skip_screenshots true
+skip_metadata false
+skip_binary_upload false
+automatic_release false
+submit_for_review false #Set to false if you want to submit manually.
+run_precheck_before_submit false
+reject_if_possible true
+api_key_path "./fastlane/app_store_connect_key.json"
+
+ipa "../build/ios/ci-sample-release.ipa"
+
+submission_information({
+    export_compliance_encryption_updated: false,
+    export_compliance_uses_encryption: false,
+    add_id_info_uses_idfa: true,
+    add_id_info_serves_ads: true,
+    add_id_info_tracks_install: true,
+    add_id_info_tracks_action: false,
+    add_id_info_limits_tracking: false,
+})

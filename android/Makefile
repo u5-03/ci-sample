@@ -1,0 +1,2 @@
+buildNativeAdhocApp:
+	bundle exec fastlane upload_firebase_app_distribution

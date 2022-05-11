@@ -1,0 +1,159 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    ENV['FL_BUILD_NUMBER_PROJECT'] = "Runner.xcodeproj"
+    ENV["SLACK_URL_FIREBASE"] = "https://hooks.slack.com/services/slack/url/sample"
+    # Ref: https://medium.com/cristian-ortega/using-swift-package-manager-in-real-life-projects-e80d60edd860
+    # check↑ 'Option4/Fastlane compatibility'
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+    # For CI KeyChain setting(This info must match Matchfile info).
+    ENV["MATCH_KEYCHAIN_NAME"] = "ci_sample_keychain"
+    ENV["MATCH_KEYCHAIN_PASSWORD"] = "match_keychain_password"
+    # Password required in Match
+    ENV["MATCH_PASSWORD"] = "match_password"
+    # Firebase
+    ENV["FIREBASE_APP_ID_IOS"] = "firebase_app_id_ios"
+  end
+
+  desc "match ad-hoc credentials"
+  lane :matchAdhoc do
+    if is_ci
+      match(
+        api_key_path: "./fastlane/app_store_connect_key.json",
+        app_identifier: 'com.example.ciSample',
+        type: "adhoc",
+        readonly: true
+      )
+    else
+      match(type: "adhoc", readonly: true)
+    end
+  end
+
+  desc "match Release credentials"
+  lane :matchRelease do
+    if is_ci
+      match(
+        api_key_path: "./fastlane/app_store_connect_key.json",
+        app_identifier: 'com.example.ciSample',
+        type: "appstore",
+        readonly: true
+      )
+    else
+      match(type: "appstore", readonly: true)
+    end
+  end
+
+  # To avoid keyword entering of KeyChain in CI
+  # Ref: https://medium.com/swift-column/fastlane-bitrise-ef1125a1d89a
+  desc "Create KeyChain for CI(GitHub Actions)"
+  lane :createKeyChain do
+    if is_ci
+      create_keychain(
+        name: ENV["MATCH_KEYCHAIN_NAME"],
+        password: ENV["MATCH_KEYCHAIN_PASSWORD"],
+        timeout: 1800
+      )
+    end
+  end
+
+  desc "Upload to Firebase AppDistribution"
+  lane :upload_firebase_app_distribution do
+    createKeyChain
+    ## Fetch certificate and provisioning profile
+    matchAdhoc
+
+    ## Build ad-hoc app
+    gym(
+      scheme: "Runner",
+      configuration: "Release",
+      output_directory: "../build/ios",
+      output_name: "ci-sample-adhoc",
+      export_options: {
+        method: "ad-hoc"
+      }
+    )
+    # Upload ad-hoc ipa to firebase app distribution
+    firebase_app_distribution(
+      app: ENV["FIREBASE_APP_ID_IOS"],
+      ipa_path: "../build/ios/ci-sample-adhoc.ipa",
+      groups: "Debug",
+      release_notes_file: "./fastlane/metadata/ja/release_notes.txt"
+    )
+    # Get app version
+    version = get_version_number(
+      xcodeproj: "Runner.xcodeproj",
+      configuration: "Release",
+      target: "Runner",
+    )
+    # Get release_note
+    releaseNote = File.read("./metadata/ja/release_notes.txt")
+
+    messasge = "Uploaded CI-Sample app(adhoc, v"+ version +").:tada: :tada: :tada: :relaxed:\n" + releaseNote
+
+    # Notify uploading app to firebase app distribution to slack channnel
+    slack(
+      slack_url: ENV["SLACK_URL_FIREBASE"],
+      channel: "#channel_name",
+      username: "iOS Deploy Bot",
+      message: messasge
+    )
+  end
+
+  desc "Upload to AppStoreConnect"
+  lane :upload_to_app_store_connect do
+    createKeyChain
+    ## Fetch certificate and provisioning profile
+    matchRelease
+    ## Build app-store app
+    gym(
+      scheme: "Runner",
+      configuration: "Release-production",
+      output_directory: "../build/ios",
+      output_name: "ci-sample-release",
+      export_options: {
+        method: "app-store"
+      }
+    )
+    # Submit release ipa to AppStoreConnect
+    deliver()
+
+    version = get_version_number(
+      xcodeproj: "Runner.xcodeproj",
+      configuration: "Release",
+      target: "Runner",
+    )
+
+    messasge = "Submitted CI-Sample app(v"+ version +") to AppStoreConnect.:tada: :tada: :tada:"
+    # Notify submitting app to AppStoreConnect to slack channnel
+    slack(
+      slack_url: ENV["SLACK_URL_FIREBASE"],
+      channel: "#channel_name",
+      username: "iOS Deploy Bot",
+      message: messasge
+    )
+    # Add release version tag
+    add_git_tag(
+      tag: "v"+ version
+    )
+    push_git_tags(
+      force: true,
+      tag: "v"+ version
+    )
+  end
+end
